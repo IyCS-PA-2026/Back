@@ -18,6 +18,7 @@ import { MonetarioColumn } from 'src/modules/common/decorators/monetario-column.
 import { CantidadColumn } from 'src/modules/common/decorators/cantidad-column.decorator';
 import { PorcentajeColumn } from 'src/modules/common/decorators/porcentaje-column.decorator';
 import { Proveedor } from 'src/modules/organizacion/proveedor/domain/entities/proveedor.entity';
+import { Presentacion } from '../value-objects/presentacion.vo';
 
 @Entity('producto')
 export class Producto {
@@ -150,11 +151,10 @@ export class Producto {
   marcaId?: number;
 
 
-  @Column({ default: false })
-  utilizaPack: boolean;
-
-  @Column({ type: 'int', nullable: true })
-  cantidadPorPack: number | null;
+  // ========== PRESENTACION (CR-002) ==========
+  // Value Object embebido: columnas presentacionCantidad y presentacionUnidadmedida
+  @Column(() => Presentacion)
+  presentacion: Presentacion;
 
   @Column({ type: 'text', nullable: true })
   imagen?: string;

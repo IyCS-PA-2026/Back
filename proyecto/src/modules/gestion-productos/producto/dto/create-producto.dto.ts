@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsString,
   IsNotEmpty,
@@ -9,8 +9,10 @@ import {
   IsNumber,
   IsInt,
   IsEnum,
+  ValidateNested,
 } from 'class-validator';
 import { AlicuotaIva } from 'src/modules/organizacion/enums/alicuota-iva.enum';
+import { PresentacionDto } from './presentacion.dto';
 
 export class CreateProductoDto {
   @Transform(({ value }) => value.trim().toLowerCase())
@@ -77,12 +79,11 @@ export class CreateProductoDto {
   @IsNumber()
   costo?: number;
 
-  @IsBoolean()
-  utilizaPack: boolean;
-
-  @IsOptional()
-  @IsInt()
-  cantidadPorPack?: number;
+  // CR-002: obligatoria al crear. Si falta, @ValidateNested la rechaza
+  // (no es un objeto); en UpdateProductoDto PartialType la vuelve opcional.
+  @ValidateNested()
+  @Type(() => PresentacionDto)
+  presentacion: PresentacionDto;
 
   @IsOptional()
   @IsNumber()

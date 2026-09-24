@@ -11,6 +11,7 @@ import {
 import { AlicuotaIva } from 'src/modules/organizacion/enums/alicuota-iva.enum';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ReferenciaDto } from 'src/modules/common/dto/referencia.dto';
+import { PresentacionDto } from './presentacion.dto';
 /*
 Se Utiliza cuando se necesita la entidad producto
 */
@@ -133,14 +134,13 @@ export class ProductoDto {
   @IsInt()
   stockMinimo: number;
 
-  @ApiProperty()
-  @IsBoolean()
-  @IsNotEmpty()
-  utilizaPack: boolean;
-
-  @ApiPropertyOptional()
-  @IsInt()
-  cantidadPorPack: number;
+  @ApiProperty({
+    type: () => PresentacionDto,
+    description: 'Presentación del producto (CR-002)',
+  })
+  @ValidateNested()
+  @Type(() => PresentacionDto)
+  presentacion: PresentacionDto;
 
   @ApiProperty({ example: 123 })
   @Type(() => Number)

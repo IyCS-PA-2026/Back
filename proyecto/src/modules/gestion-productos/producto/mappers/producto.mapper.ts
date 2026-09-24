@@ -4,6 +4,8 @@ import { GetProductoDto } from '../dto/get-producto.dto';
 import { UpdatePrecioDto } from '../dto/update-precio.dto';
 import { Usuario } from 'src/modules/gestion-usuario/usuario/domain/entities/usuario.entity';
 import { ProductoDto } from '../dto/producto.dto';
+import { PresentacionDto } from '../dto/presentacion.dto';
+import { Presentacion } from '../domain/value-objects/presentacion.vo';
 
 import {
   toReferenciaDto,
@@ -39,8 +41,7 @@ export class ProductoMapper {
       utilizaStockMinimo: entity.utilizaStockMinimo,
 
       stockMinimo: entity.stockMinimo,
-      utilizaPack: entity.utilizaPack,
-      cantidadPorPack: entity.cantidadPorPack ?? 0,
+      presentacion: ProductoMapper.toPresentacionDto(entity.presentacion),
       sistema: entity.sistema,
       codigoReferencia: entity.codigoReferencia ?? '',
 
@@ -63,6 +64,14 @@ export class ProductoMapper {
     entity.usuarioUpdated = usuario;
   }
 
+
+  // CR-002: el VO se expone con la misma forma que recibe la API
+  static toPresentacionDto(presentacion: Presentacion): PresentacionDto {
+    return {
+      cantidad: presentacion.cantidad,
+      unidadMedida: presentacion.unidadMedida,
+    };
+  }
 
   static toDto(entity: Producto): ProductoDto {
    
@@ -93,8 +102,7 @@ export class ProductoMapper {
       ubicacion: entity.ubicacion ?? '',
       utilizaStockMinimo: entity.utilizaStockMinimo ?? false,
       stockMinimo: entity.stockMinimo ?? 0,
-      utilizaPack: entity.utilizaPack ?? false,
-      cantidadPorPack: entity.cantidadPorPack ?? 0,
+      presentacion: ProductoMapper.toPresentacionDto(entity.presentacion),
       sistema: entity.sistema,
       codigoReferencia: entity.codigoReferencia ?? '',
 

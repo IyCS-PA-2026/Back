@@ -6,6 +6,7 @@ import { UpdateProductoDto } from '../../dto/update-producto.dto';
 import { IUnitOfWork } from 'src/modules/common/unit-of-work/iunit-of-work.';
 import { Usuario } from 'src/modules/gestion-usuario/usuario/domain/entities/usuario.entity';
 import { UpdatePrecioDto } from '../../dto/update-precio.dto';
+import { Presentacion } from '../value-objects/presentacion.vo';
 
 export interface IProductoRepository {
 
@@ -14,6 +15,7 @@ export interface IProductoRepository {
     linea: Linea,
     marca: Marca,
     usuario: Usuario,
+    presentacion: Presentacion,
   ): Promise<Producto>;
 
   findOne(id: number): Promise<Producto | null>;
@@ -43,12 +45,14 @@ export interface IProductoRepository {
 
   findByIdWithoutRelations(id: number): Promise<Producto | null> | undefined;
 
+  // presentacion undefined = se conserva la presentación actual
   update(
     id: number,
     data: UpdateProductoDto,
     linea: Linea,
     marca: Marca,
     usuario: Usuario,
+    presentacion?: Presentacion,
   ): Promise<Producto>;
 
   updateEntity(uow: IUnitOfWork, data: Producto): Promise<Producto>;

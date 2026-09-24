@@ -10,6 +10,7 @@ import { DatabaseConnectionException } from 'src/modules/common/exceptions/datab
 import { IUnitOfWork } from 'src/modules/common/unit-of-work/iunit-of-work.';
 import { Usuario } from 'src/modules/gestion-usuario/usuario/domain/entities/usuario.entity';
 import { UpdatePrecioDto } from '../../dto/update-precio.dto';
+import { Presentacion } from '../../domain/value-objects/presentacion.vo';
 
 @Injectable()
 export class ProductoRepository implements IProductoRepository {
@@ -30,6 +31,7 @@ export class ProductoRepository implements IProductoRepository {
     linea: Linea,
     marca: Marca,
     usuario: Usuario,
+    presentacion: Presentacion,
   ): Promise<Producto> {
     this.logger.log(`Creando un nuevo `);
     try {
@@ -38,6 +40,7 @@ export class ProductoRepository implements IProductoRepository {
         linea,
         marca,
         usuario,
+        presentacion,
       );
     } catch (error) {
       this.logger.error(`Error al crear ${this.ENTITY_NAME}: `);
@@ -54,6 +57,7 @@ export class ProductoRepository implements IProductoRepository {
     marca: Marca,
 
     usuario: Usuario,
+    presentacion?: Presentacion,
   ): Promise<Producto> {
     return this.persistenceService.update(
       id,
@@ -62,6 +66,7 @@ export class ProductoRepository implements IProductoRepository {
       marca,
 
       usuario,
+      presentacion,
     );
   }
 
