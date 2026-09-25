@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { DatabaseConnectionException } from 'src/modules/common/exceptions/database-connection.exception';
 import { EntityNotFoundException } from 'src/modules/common/exceptions/entity-notFound-exceptions';
 import { IUnitOfWork } from 'src/modules/common/unit-of-work/iunit-of-work.';
@@ -30,6 +30,7 @@ export class SuperLineaPersistenceAdapter
     @InjectRepository(SuperLinea)
     repository: Repository<SuperLinea>,
 
+    private readonly dataSource: DataSource,
     @Inject('UnitOfWork') public readonly uow: IUnitOfWork,
   ) {
     super(repository);
