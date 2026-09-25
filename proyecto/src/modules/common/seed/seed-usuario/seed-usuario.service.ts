@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Rol } from 'src/modules/gestion-usuario/rol/domain/entities/rol.entity';
 import { Usuario } from 'src/modules/gestion-usuario/usuario/domain/entities/usuario.entity';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -54,27 +54,37 @@ export class SeedUsuarioService {
 async seedUsuario() {
 
   const entryData = [
-    { mail: 'admin@gmail.com', contrasena: 'admin123', rol: "Admin", denominacion:"Admin" },
-  
+    // "Administrador" es el rol que exigen los endpoints de gestión (@Roles)
+    { mail: 'admin@gmail.com', contrasena: 'admin123', roles: ["Admin", "Administrador"], denominacion:"Admin" },
+
   ];
 
   for (const data of entryData) {
 
-    const rol = await this.rolRepository.findOneBy({
-      denominacion: data.rol
+    const roles = await this.rolRepository.findBy({
+      denominacion: In(data.roles)
     });
 
-    if (!rol) {
-      console.log(`❌ No se encontró el rol "${data.rol}".`);
+    if (roles.length !== data.roles.length) {
+      console.log(`❌ No se encontraron todos los roles "${data.roles.join(', ')}".`);
       continue;
     }
 
-    const exists = await this.usuarioRepository.findOneBy({
-      mail: data.mail
+    const exists = await this.usuarioRepository.findOne({
+      where: { mail: data.mail },
+      relations: ['roles'],
     });
 
     if (exists) {
-      console.log(`⚠️ Usuario "${data.mail}" ya existe.`);
+      // Bases creadas con el seed anterior: se agregan los roles faltantes
+      const faltantes = roles.filter((rol) => !exists.roles.some((r) => r.id === rol.id));
+      if (faltantes.length > 0) {
+        exists.roles = [...exists.roles, ...faltantes];
+        await this.usuarioRepository.save(exists);
+        console.log(`✅ Usuario "${data.mail}": roles agregados ${faltantes.map((r) => r.denominacion).join(', ')}.`);
+      } else {
+        console.log(`⚠️ Usuario "${data.mail}" ya existe.`);
+      }
       continue;
     }
 
@@ -84,7 +94,7 @@ async seedUsuario() {
       mail: data.mail,
       contrasena: contrasenaHasheada,
       denominacion: data.denominacion,
-      roles: [rol], 
+      roles,
     });
 
     await this.usuarioRepository.save(usuario);

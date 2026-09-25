@@ -32,6 +32,16 @@ export class CreateLineaDto {
   @IsString()
   observacion?: string;
 
+  @ApiProperty({
+    example: 1,
+    description: 'ID de la superlínea que agrupa a la línea (null para ninguna)',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsInt({ message: 'El superLineaId debe ser un número entero.' })
+  superLineaId?: number | null;
+
   createdAt?: Date;
 
   @IsNotEmpty({ message: 'El usuarioCreatedId es obligatorio.' })

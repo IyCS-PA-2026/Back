@@ -6,6 +6,8 @@ import { UpdateProductoDto } from '../../dto/update-producto.dto';
 import { IUnitOfWork } from 'src/modules/common/unit-of-work/iunit-of-work.';
 import { Usuario } from 'src/modules/gestion-usuario/usuario/domain/entities/usuario.entity';
 import { UpdatePrecioDto } from '../../dto/update-precio.dto';
+import { Presentacion } from '../value-objects/presentacion.vo';
+import { HistorialPrecio } from '../entities/historial-precio.entity';
 
 export interface IProductoRepository {
 
@@ -14,6 +16,7 @@ export interface IProductoRepository {
     linea: Linea,
     marca: Marca,
     usuario: Usuario,
+    presentacion: Presentacion,
   ): Promise<Producto>;
 
   findOne(id: number): Promise<Producto | null>;
@@ -43,12 +46,14 @@ export interface IProductoRepository {
 
   findByIdWithoutRelations(id: number): Promise<Producto | null> | undefined;
 
+  // presentacion undefined = se conserva la presentación actual
   update(
     id: number,
     data: UpdateProductoDto,
     linea: Linea,
     marca: Marca,
     usuario: Usuario,
+    presentacion?: Presentacion,
   ): Promise<Producto>;
 
   updateEntity(uow: IUnitOfWork, data: Producto): Promise<Producto>;
@@ -80,4 +85,17 @@ export interface IProductoRepository {
   existsProductosActivosByLinea(lineaId: number): Promise<boolean>;
 
   findByIds(ids: number[]): Promise<Producto[]>;
+
+  // CR-006: lineaId undefined = todos los productos activos
+  findActivosParaActualizacionPrecio(lineaId?: number): Promise<Producto[]>;
+  // CR-006: persiste margen y precio de todos los productos en una única transacción
+  // CR-007: en la misma transacción registra el historial de los precios que cambiaron
+  guardarPreciosEnLote(
+    productos: Producto[],
+    usuario: Usuario,
+    historial: HistorialPrecio[],
+  ): Promise<void>;
+
+  // CR-007: cambios de precio del producto, del más reciente al más antiguo
+  findHistorialPrecios(productoId: number): Promise<HistorialPrecio[]>;
 }

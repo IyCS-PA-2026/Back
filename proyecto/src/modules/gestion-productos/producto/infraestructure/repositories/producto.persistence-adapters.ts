@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { HttpException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Transactional } from 'src/modules/common/decorators/transactional.decoratos';
 import { DatabaseConnectionException } from 'src/modules/common/exceptions/database-connection.exception';
@@ -14,6 +14,11 @@ import { CreateProductoDto } from '../../dto/create-producto.dto';
 import { UpdatePrecioDto } from '../../dto/update-precio.dto';
 import { UpdateProductoDto } from '../../dto/update-producto.dto';
 import { ProductoMapper } from '../../mappers/producto.mapper';
+import { Presentacion } from '../../domain/value-objects/presentacion.vo';
+import {
+  HistorialPrecio,
+  MotivoHistorialPrecio,
+} from '../../domain/entities/historial-precio.entity';
 
 
 @Injectable()
@@ -36,6 +41,7 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
     linea: Linea,
     marca: Marca,
     usuario: Usuario,
+    presentacion: Presentacion,
   ): Promise<Producto> {
     const repo = this.uow.getRepository(Producto);
     this.logger.log(`Creando un nuevo p ${this.ENTITY_NAME}`);
@@ -48,17 +54,31 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
       this.logger.debug('Marca:', marca);
       this.logger.debug('Usuario:', usuario);
 
+      // CR-002: se persiste el VO ya validado, no el objeto plano del DTO
+      const { presentacion: _presentacionDto, ...datos } = data;
+
       const nuevaEntity = repo.create({
-        ...data,
+        ...datos,
         linea,
         marca,
         usuarioCreated: usuario,
       });
+      nuevaEntity.presentacion = presentacion;
+      nuevaEntity.recalcularPrecio();
 
       this.logger.debug('Entity creada:', nuevaEntity);
 
       const entityGuardada = await repo.save(nuevaEntity);
       this.logger.log(`Entity guardada con ID: ${entityGuardada.id}`);
+
+      // CR-007: precio inicial en el historial, en la misma transacción que el alta
+      const cambioDePrecio = entityGuardada.registrarCambioDePrecio(
+        null,
+        MotivoHistorialPrecio.ALTA,
+      );
+      if (cambioDePrecio) {
+        await this.uow.getRepository(HistorialPrecio).save(cambioDePrecio);
+      }
 
       this.logger.log(
         `${this.ENTITY_NAME} creado exitosamente con ID: ${entityGuardada.id}`,
@@ -162,6 +182,7 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
     marca: Marca,
 
     usuario: Usuario,
+    presentacion?: Presentacion,
   ): Promise<Producto> {
     const repo = this.uow.getRepository(Producto);
     try {
@@ -170,24 +191,43 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
       if (!entity) {
         throw new NotFoundException(`EL prodcuto con ID ${id} no encontrada`);
       }
+      // CR-002: la presentación del DTO no se copia; se asigna el VO validado
       const {
-
+        presentacion: _presentacionDto,
         ...dataSinItems
       } = data;
+
+      const precioAnterior = entity.precio ?? 0;
 
       Object.assign(entity, dataSinItems, {
         linea,
         marca,
       });
 
-      entity.usuarioUpdated = usuario; 
+      if (presentacion) {
+        entity.presentacion = presentacion;
+      }
+      entity.recalcularPrecio();
+
+      // CR-007: se valida (precio > 0) antes de escribir y se guarda en la misma transacción
+      const cambioDePrecio = entity.registrarCambioDePrecio(
+        precioAnterior,
+        MotivoHistorialPrecio.EDICION,
+      );
+
+      entity.usuarioUpdated = usuario;
       const entityActualizada = await repo.save(entity);
 
+      if (cambioDePrecio) {
+        await this.uow.getRepository(HistorialPrecio).save(cambioDePrecio);
+      }
 
       return entityActualizada;
     } catch (error) {
       this.logger.warn(`Items para eliminar: )}`);
 
+      // Errores de dominio (400) y de negocio no se disfrazan de error de base
+      if (error instanceof HttpException) throw error;
       throw new DatabaseConnectionException(error);
     }
   }
@@ -239,8 +279,13 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
       const parametros: any = {};
 
       if (denominacion) {
+        // CR-004: el texto se busca a la vez en el Producto, su Línea y la
+        // SuperLínea de su Línea (Producto → Línea → SuperLínea, de CR-003)
+        query.leftJoin('linea.superLinea', 'superLinea');
         condiciones.push(
           `UPPER(producto.denominacion) LIKE UPPER(:denominacion)`,
+          `UPPER(linea.denominacion) LIKE UPPER(:denominacion)`,
+          `UPPER(superLinea.denominacion) LIKE UPPER(:denominacion)`,
         );
         parametros.denominacion = `%${denominacion}%`;
       }
@@ -382,6 +427,51 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
 
     await repo.save(entity);
 
+  }
+
+  async findActivosParaActualizacionPrecio(lineaId?: number): Promise<Producto[]> {
+    return this.repository.find({
+      where: {
+        deletedAt: IsNull(),
+        ...(lineaId !== undefined && { lineaId }),
+      },
+    });
+  }
+
+  // Solo se escriben costo, margen y precio: si un update falla, @Transactional revierte todo el lote
+  // CR-007: el historial viaja en la misma transacción (precio e historial nunca quedan desfasados)
+  @Transactional()
+  async guardarPreciosEnLote(
+    productos: Producto[],
+    usuario: Usuario,
+    historial: HistorialPrecio[],
+  ): Promise<void> {
+    const repo = this.uow.getRepository(Producto);
+    for (const producto of productos) {
+      await repo.update(producto.id, {
+        costo: producto.costo,
+        fechaCosto: producto.fechaCosto,
+        porcentaje: producto.porcentaje,
+        precio: producto.precio,
+        usuarioUpdated: usuario,
+      });
+    }
+    if (historial.length > 0) {
+      await this.uow.getRepository(HistorialPrecio).save(historial);
+    }
+  }
+
+  async findHistorialPrecios(productoId: number): Promise<HistorialPrecio[]> {
+    try {
+      return await this.dataSource.getRepository(HistorialPrecio).find({
+        where: { productoId },
+        order: { fecha: 'DESC', id: 'DESC' },
+      });
+    } catch (error) {
+      throw new DatabaseConnectionException(
+        'Error al conectar con la base de datos.',
+      );
+    }
   }
 
   async findByDenominacion(denominacion: string): Promise<Producto | null> {

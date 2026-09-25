@@ -3,6 +3,7 @@ import { ProductoController } from './application/controllers/producto.controlle
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NormalizeDenominacionPipe } from 'src/modules/common/pipes/normalize-denominations.pipe';
 import { Producto } from './domain/entities/producto.entity';
+import { HistorialPrecio } from './domain/entities/historial-precio.entity';
 import { ProductoRepository } from './infraestructure/repositories/producto.repository';
 import { LineaModule } from '../linea/linea.module';
 import { MarcaModule } from '../marca/marca.module';
@@ -19,11 +20,13 @@ import { ProductoRelatedEntitiesValidator } from './infraestructure/validators/p
 import { ProductoValidationService } from './domain/services/producto-validation.service.ts';
 import { ProductoIntrinsicValidationService } from './domain/services/producto-intrinsic-validation.service.ts';
 import { ProductoDeletePolicy } from './application/policies/producto-delete.policy';
+import { ActualizacionMasivaPreciosController } from './application/controllers/actualizacion-masiva-precios.controller';
+import { ActualizacionMasivaPreciosService } from './domain/services/actualizacion-masiva-precios.service';
 
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Producto]),
+    TypeOrmModule.forFeature([Producto, HistorialPrecio]),
     CommonModule,
     forwardRef(() => LineaModule),
     forwardRef(() => MarcaModule),
@@ -31,10 +34,11 @@ import { ProductoDeletePolicy } from './application/policies/producto-delete.pol
     UsuarioModule,
   ],
 
-  controllers: [ProductoController],
-  
+  controllers: [ProductoController, ActualizacionMasivaPreciosController],
+
   providers: [
     ProductoService,
+    ActualizacionMasivaPreciosService,
     ProductoIntrinsicValidationService,
     ProductoValidationService,
     ProductoRelatedEntitiesValidator,

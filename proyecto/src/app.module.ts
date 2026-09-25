@@ -4,6 +4,7 @@ import { AppService } from './app.service';
 import { MarcaModule } from './modules/gestion-productos/marca/marca.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { LineaModule } from './modules/gestion-productos/linea/linea.module';
+import { SuperLineaModule } from './modules/gestion-productos/super-linea/super-linea.module';
 import { ProductoModule } from './modules/gestion-productos/producto/producto.module';
 import { ConfigModule } from '@nestjs/config';
 import { ProveedorModule } from './modules/organizacion/proveedor/proveedor.module';
@@ -47,12 +48,14 @@ import { BusquedasModule } from './modules/gestion-documentos/busquedas/busqueda
       // TypeOrmModule.forFeature([Entidad]) en tus módulos
       entities: [__dirname + '/**/*.entity{.ts,.js}'],
       // entities,
-      synchronize: false,  
+      synchronize: true,
+
       ssl: process.env.DB_SSL === 'true',
     }),
 
     MarcaModule,
     LineaModule,
+    SuperLineaModule,
     ProductoModule,
     CondicionIvaModule,
     LocalidadModule,

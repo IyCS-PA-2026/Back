@@ -18,6 +18,13 @@ import { MonetarioColumn } from 'src/modules/common/decorators/monetario-column.
 import { CantidadColumn } from 'src/modules/common/decorators/cantidad-column.decorator';
 import { PorcentajeColumn } from 'src/modules/common/decorators/porcentaje-column.decorator';
 import { Proveedor } from 'src/modules/organizacion/proveedor/domain/entities/proveedor.entity';
+import { Presentacion } from '../value-objects/presentacion.vo';
+import { BadRequestException } from '@nestjs/common';
+import { redondear } from 'src/modules/common/utils/number/redondeo';
+import { HistorialPrecio } from './historial-precio.entity';
+
+// Límite de la columna del margen: decimal(5,2)
+export const MARGEN_MAXIMO = 999.99;
 
 @Entity('producto')
 export class Producto {
@@ -150,11 +157,10 @@ export class Producto {
   marcaId?: number;
 
 
-  @Column({ default: false })
-  utilizaPack: boolean;
-
-  @Column({ type: 'int', nullable: true })
-  cantidadPorPack: number | null;
+  // ========== PRESENTACION (CR-002) ==========
+  // Value Object embebido: columnas presentacionCantidad y presentacionUnidadmedida
+  @Column(() => Presentacion)
+  presentacion: Presentacion;
 
   @Column({ type: 'text', nullable: true })
   imagen?: string;
@@ -172,4 +178,92 @@ export class Producto {
 
   @Column({ type: 'text', nullable: true })
   codigoReferencia?: string | null;
+
+  // ========== PRECIO (CR-006) ==========
+  // El margen se persiste en la columna "porcentaje" (pendiente de renombrar)
+  get margen(): number {
+    return this.porcentaje ?? 0;
+  }
+
+  // Precio = Costo × (1 + Margen / 100). Única fuente de la fórmula.
+  calcularPrecio(): number {
+    return redondear((this.costo ?? 0) * (1 + this.margen / 100), 2);
+  }
+
+  // Asigna un nuevo margen y deriva el precio. Rechaza márgenes o costos inválidos.
+  aplicarMargen(nuevoMargen: number): void {
+    if (!Number.isFinite(nuevoMargen) || nuevoMargen < 0) {
+      throw new BadRequestException(
+        `El margen resultante (${nuevoMargen}) del producto "${this.denominacion}" no puede ser negativo.`,
+      );
+    }
+    if (nuevoMargen > MARGEN_MAXIMO) {
+      throw new BadRequestException(
+        `El margen resultante (${nuevoMargen}) del producto "${this.denominacion}" supera el máximo de ${MARGEN_MAXIMO}.`,
+      );
+    }
+    if (this.costo == null || !Number.isFinite(this.costo) || this.costo < 0) {
+      throw new BadRequestException(
+        `El producto "${this.denominacion}" no tiene un costo válido para calcular el precio.`,
+      );
+    }
+
+    this.porcentaje = redondear(nuevoMargen, 2);
+    this.precio = this.calcularPrecio();
+  }
+
+  // Asigna un nuevo costo conservando el margen, y deriva el precio.
+  aplicarCosto(nuevoCosto: number): void {
+    if (!Number.isFinite(nuevoCosto) || nuevoCosto < 0) {
+      throw new BadRequestException(
+        `El costo resultante (${nuevoCosto}) del producto "${this.denominacion}" no puede ser negativo.`,
+      );
+    }
+    if (!Number.isFinite(this.margen) || this.margen < 0) {
+      throw new BadRequestException(
+        `El producto "${this.denominacion}" no tiene un margen válido para calcular el precio.`,
+      );
+    }
+
+    this.costo = redondear(nuevoCosto, 2);
+    this.fechaCosto = new Date();
+    this.precio = this.calcularPrecio();
+  }
+
+  // Alta y edición: el precio nunca se carga, se deriva de costo y margen
+  recalcularPrecio(): void {
+    this.precio = this.calcularPrecio();
+  }
+
+  // ========== HISTORIAL DE PRECIOS (CR-007) ==========
+  // Devuelve el registro del cambio (sin persistir) o null si el precio no cambió.
+  // precioAnterior null = alta: sin precio todavía (precio 0) no hay nada que registrar.
+  // La regla precio > 0 la aplica HistorialPrecio.registrar.
+  registrarCambioDePrecio(
+    precioAnterior: number | null,
+    motivo: string,
+  ): HistorialPrecio | null {
+    const precioNuevo = this.precio ?? 0;
+
+    if (precioAnterior === null && precioNuevo === 0) return null;
+    if (
+      precioAnterior !== null &&
+      redondear(precioAnterior, 2) === redondear(precioNuevo, 2)
+    ) {
+      return null;
+    }
+
+    try {
+      return HistorialPrecio.registrar({
+        productoId: this.id,
+        precioAnterior,
+        precioNuevo,
+        motivo,
+      });
+    } catch (error) {
+      throw new BadRequestException(
+        `Producto "${this.denominacion}": ${error.message}`,
+      );
+    }
+  }
 }

@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsString,
   IsNotEmpty,
@@ -10,9 +10,13 @@ import {
   IsInt,
   IsEnum,
   IsPositive,
+  ValidateNested,
   Min,
+  Max,
 } from 'class-validator';
 import { AlicuotaIva } from 'src/modules/organizacion/enums/alicuota-iva.enum';
+import { PresentacionDto } from './presentacion.dto';
+import { MARGEN_MAXIMO } from '../domain/entities/producto.entity';
 
 export class CreateProductoDto {
   @Transform(({ value }) => value.trim().toLowerCase())
@@ -81,12 +85,11 @@ export class CreateProductoDto {
   @IsPositive({ message: 'El costo debe ser mayor que 0.' })
   costo?: number;
 
-  @IsBoolean()
-  utilizaPack: boolean;
-
-  @IsOptional()
-  @IsInt()
-  cantidadPorPack?: number;
+  // CR-002: obligatoria al crear. Si falta, @ValidateNested la rechaza
+  // (no es un objeto); en UpdateProductoDto PartialType la vuelve opcional.
+  @ValidateNested()
+  @Type(() => PresentacionDto)
+  presentacion: PresentacionDto;
 
   @IsOptional()
   @IsNumber()
@@ -102,8 +105,11 @@ export class CreateProductoDto {
   marcaId: number;
 
 
+  // Margen (%). El precio no se recibe: lo deriva Producto.calcularPrecio()
   @IsOptional()
   @IsNumber()
+  @Min(0, { message: 'El margen no puede ser negativo.' })
+  @Max(MARGEN_MAXIMO, { message: `El margen no puede superar ${MARGEN_MAXIMO}.` })
   porcentaje?: number;
 
   @IsOptional()

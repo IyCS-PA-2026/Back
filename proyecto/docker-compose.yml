@@ -31,6 +31,26 @@ services:
     networks:
       - app-network
 
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: proyecto-backend
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    command: yarn run start:dev
+    depends_on:
+      - mysql
+    networks:
+      - app-network
+
 volumes:
   mysql_data:
 

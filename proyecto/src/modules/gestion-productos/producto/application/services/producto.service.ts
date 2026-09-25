@@ -27,6 +27,8 @@ import { ProductoRelatedEntitiesValidator } from '../../infraestructure/validato
 import { ProductoUniquenessValidator } from '../../infraestructure/validators/producto-uniqueness.validator.ts';
 import { UsuarioValidator } from 'src/modules/common/utils/validation/usuario-validator';
 import { ProductoDeletePolicy } from '../policies/producto-delete.policy';
+import { Presentacion } from '../../domain/value-objects/presentacion.vo';
+import { HistorialPrecioDto } from '../../dto/historial-precio.dto';
 @Injectable()
 export class ProductoService {
   private readonly logger = new Logger(ProductoService.name);
@@ -61,10 +63,14 @@ export class ProductoService {
     );
 
     // Orquestar todas las validaciones
+    // CR-002: la presentación es obligatoria; el VO aplica sus reglas
+    const presentacion = Presentacion.crear(
+      dto.presentacion?.cantidad,
+      dto.presentacion?.unidadMedida,
+    );
+
     const { marca, linea, usuario } =
       await this.validarYPrepararCreacion(dto);
-
-
 
     const entity = await this.repository.create(
       dto,
@@ -72,6 +78,7 @@ export class ProductoService {
       marca,
 
       usuario,
+      presentacion,
     );
 
     return MessageFrontUtils.createSimple(
@@ -84,6 +91,14 @@ export class ProductoService {
   async update(id: number, dto: UpdateProductoDto) {
     this.logger.log(`Actualizandox  ${this.ENTITY_NAME} con ID: ${id}`);
 
+    // CR-002: si se envía, la presentación se reemplaza completa
+    const presentacion = dto.presentacion
+      ? Presentacion.crear(
+          dto.presentacion.cantidad,
+          dto.presentacion.unidadMedida,
+        )
+      : undefined;
+
     const { marca, linea, usuario } =
       await this.validarYPrepararActualizacion(id, dto);
 
@@ -94,6 +109,7 @@ export class ProductoService {
       marca,
 
       usuario,
+      presentacion,
     );
 
     return MessageFrontUtils.createSimple(
@@ -184,6 +200,15 @@ export class ProductoService {
       );
     this.logger.log(`b1x`);
     return ProductoMapper.toDto(entity);
+  }
+
+  // CR-007: el producto debe existir (el repositorio lanza 404 si no)
+  async findHistorialPrecios(id: number): Promise<HistorialPrecioDto[]> {
+    await this.findEntityById(id);
+    const historial = await this.repository.findHistorialPrecios(id);
+    return historial.map((registro) =>
+      ProductoMapper.toHistorialPrecioDto(registro),
+    );
   }
 
   async findEntityById(id: number) {
