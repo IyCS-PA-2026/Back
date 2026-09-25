@@ -251,8 +251,13 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
       const parametros: any = {};
 
       if (denominacion) {
+        // CR-004: el texto se busca a la vez en el Producto, su Línea y la
+        // SuperLínea de su Línea (Producto → Línea → SuperLínea, de CR-003)
+        query.leftJoin('linea.superLinea', 'superLinea');
         condiciones.push(
           `UPPER(producto.denominacion) LIKE UPPER(:denominacion)`,
+          `UPPER(linea.denominacion) LIKE UPPER(:denominacion)`,
+          `UPPER(superLinea.denominacion) LIKE UPPER(:denominacion)`,
         );
         parametros.denominacion = `%${denominacion}%`;
       }
