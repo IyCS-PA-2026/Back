@@ -2,6 +2,7 @@ import {
   forwardRef,
   Inject,
   Injectable,
+  BadRequestException,
   InternalServerErrorException,
   Logger,
   NotFoundException,
@@ -69,7 +70,7 @@ export class ProductoService {
     );
 
     const { marca, linea, usuario } =
-      await this.validarYPrepararCreacion(dto);
+      await this.validarYPrepararCreacion(dto, presentacion);
 
     const entity = await this.repository.create(
       dto,
@@ -89,6 +90,13 @@ export class ProductoService {
 
   async update(id: number, dto: UpdateProductoDto) {
     this.logger.log(`Actualizandox  ${this.ENTITY_NAME} con ID: ${id}`);
+
+    if (
+      Object.prototype.hasOwnProperty.call(dto, 'denominacion') &&
+      (!dto.denominacion || dto.denominacion.trim().length === 0)
+    ) {
+      throw new BadRequestException('La denominación no puede estar vacía.');
+    }
 
     // CR-002: si se envía, la presentación se reemplaza completa
     const presentacion = dto.presentacion
@@ -328,18 +336,10 @@ export class ProductoService {
    * Orquesta todas las validaciones necesarias para crear un producto
    * @private
    */
-  private async validarYPrepararCreacion(dto: CreateProductoDto) {
-    // Validar datos  (Domain - sin DB)
-    this.intrinsicValidationService.validarDatosBasicos({
-      denominacion: dto.denominacion,
-      marcaId: dto.marcaId,
-      lineaId: dto.lineaId,
-      alicuotaIva: dto.alicuotaIva,
-    });
-
-    // Validar unicidad (Infrastructure - DB)
-    await this.uniquenessValidator.validarDenominacionUnica(dto.denominacion);
-
+  private async validarYPrepararCreacion(
+    dto: CreateProductoDto,
+    presentacion: Presentacion,
+  ) {
     if (dto.codigoProveedor) {
       await this.uniquenessValidator.validarCodigoProveedorUnico(
         dto.codigoProveedor,
@@ -361,6 +361,24 @@ export class ProductoService {
 
     );
 
+    if (!dto.denominacion || dto.denominacion.trim().length === 0) {
+      dto.denominacion = Producto.generarDenominacionSugerida(
+        marca,
+        linea,
+        presentacion,
+      );
+    }
+
+    // Validar datos  (Domain - sin DB)
+    this.intrinsicValidationService.validarDatosBasicos({
+      denominacion: dto.denominacion,
+      marcaId: dto.marcaId,
+      lineaId: dto.lineaId,
+      alicuotaIva: dto.alicuotaIva,
+    });
+
+    // Validar unicidad (Infrastructure - DB)
+    await this.uniquenessValidator.validarDenominacionUnica(dto.denominacion);
 
     //  Validar usuario existe (Infrastructure)
     const usuario = await this.usuarioValidator.validarUsuarioExiste(

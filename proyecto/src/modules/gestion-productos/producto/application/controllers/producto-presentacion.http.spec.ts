@@ -25,8 +25,8 @@ import { Presentacion } from '../../domain/value-objects/presentacion.vo';
 describe('Producto HTTP - presentación (CR-002)', () => {
   let app: INestApplication<App>;
 
-  const linea = { id: 1, sistema: 0 };
-  const marca = { id: 2, sistema: 0 };
+  const linea = { id: 1, denominacion: 'Aceites', sistema: 0 };
+  const marca = { id: 2, denominacion: 'Natura', sistema: 0 };
   const usuario = { id: 3 };
 
   const productoGuardado = () => ({
@@ -142,6 +142,26 @@ describe('Producto HTTP - presentación (CR-002)', () => {
     });
 
     it.each([
+      ['ausente', undefined],
+      ['vacia', ''],
+      ['solo espacios', '   '],
+    ])('201: genera denominacion automatica cuando viene %s', async (_caso, denominacion) => {
+      const body = { ...bodyValido(), denominacion };
+      if (denominacion === undefined) {
+        delete body.denominacion;
+      }
+
+      await request(app.getHttpServer())
+        .post('/producto')
+        .send(body)
+        .expect(201);
+
+      expect(repository.create.mock.calls[0][0].denominacion).toBe(
+        'Natura Aceites 1.5 l',
+      );
+    });
+
+    it.each([
       ['sin presentación', undefined],
       ['presentación null', null],
       ['presentación no objeto', '1 kg'],
@@ -199,6 +219,18 @@ describe('Producto HTTP - presentación (CR-002)', () => {
       expect(
         repository.update.mock.calls[0][5].equals(Presentacion.crear(900, 'ml')),
       ).toBe(true);
+    });
+
+    it.each([
+      ['vacia', ''],
+      ['solo espacios', '   '],
+    ])('400: rechaza denominacion %s en actualizacion', async (_caso, denominacion) => {
+      await request(app.getHttpServer())
+        .put('/producto/10')
+        .send({ denominacion, usuarioUpdatedId: usuario.id })
+        .expect(400);
+
+      expect(repository.update).not.toHaveBeenCalled();
     });
 
     it.each([

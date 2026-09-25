@@ -23,8 +23,8 @@ import { UpdateProductoDto } from '../../dto/update-producto.dto';
 describe('ProductoService - presentación (CR-002)', () => {
   let service: ProductoService;
 
-  const linea = { id: 1, sistema: 0 };
-  const marca = { id: 2, sistema: 0 };
+  const linea = { id: 1, denominacion: 'Aceites', sistema: 0 };
+  const marca = { id: 2, denominacion: 'Natura', sistema: 0 };
   const usuario = { id: 3 };
 
   const repository = {
@@ -103,6 +103,38 @@ describe('ProductoService - presentación (CR-002)', () => {
     });
 
     it.each([
+      ['ausente', undefined],
+      ['vacia', ''],
+      ['solo espacios', '   '],
+    ])('genera la denominacion sugerida cuando viene %s', async (_caso, denominacion) => {
+      await service.create({
+        ...createDto({ cantidad: 1, unidadMedida: 'L' }),
+        denominacion,
+      } as CreateProductoDto);
+
+      expect(uniquenessValidator.validarDenominacionUnica).toHaveBeenCalledWith(
+        'Natura Aceites 1 L',
+      );
+      expect(repository.create.mock.calls[0][0].denominacion).toBe(
+        'Natura Aceites 1 L',
+      );
+    });
+
+    it('conserva la denominacion manual valida enviada en el alta', async () => {
+      await service.create({
+        ...createDto({ cantidad: 1, unidadMedida: 'pack x6' }),
+        denominacion: 'Nombre manual',
+      } as CreateProductoDto);
+
+      expect(uniquenessValidator.validarDenominacionUnica).toHaveBeenCalledWith(
+        'Nombre manual',
+      );
+      expect(repository.create.mock.calls[0][0].denominacion).toBe(
+        'Nombre manual',
+      );
+    });
+
+    it.each([
       ['sin presentación', undefined],
       ['cantidad 0', { cantidad: 0, unidadMedida: 'kg' }],
       ['cantidad negativa', { cantidad: -2, unidadMedida: 'kg' }],
@@ -141,6 +173,23 @@ describe('ProductoService - presentación (CR-002)', () => {
       const presentacion = repository.update.mock.calls[0][5];
       expect(presentacion).toBeInstanceOf(Presentacion);
       expect(presentacion.equals(Presentacion.crear(500, 'g'))).toBe(true);
+      expect(repository.update.mock.calls[0][1].denominacion).toBeUndefined();
+      expect(uniquenessValidator.validarDenominacionUnica).not.toHaveBeenCalled();
+    });
+
+    it('permite editar manualmente la denominacion en una actualizacion', async () => {
+      await service.update(10, {
+        denominacion: 'nombre editado',
+        usuarioUpdatedId: usuario.id,
+      } as UpdateProductoDto);
+
+      expect(uniquenessValidator.validarDenominacionUnica).toHaveBeenCalledWith(
+        'nombre editado',
+        10,
+      );
+      expect(repository.update.mock.calls[0][1].denominacion).toBe(
+        'nombre editado',
+      );
     });
 
     it('con presentación inválida no persiste nada', async () => {

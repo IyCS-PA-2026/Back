@@ -15,7 +15,12 @@ import { AlicuotaIva } from 'src/modules/organizacion/enums/alicuota-iva.enum';
 import { PresentacionDto } from './presentacion.dto';
 
 export class CreateProductoDto {
-  @Transform(({ value }) => value.trim().toLowerCase())
+  @Transform(({ value }) => {
+    if (typeof value !== 'string') return value;
+    const normalizada = value.trim().toLowerCase();
+    return normalizada.length === 0 ? undefined : normalizada;
+  })
+  @IsOptional()
   @IsString({ message: 'La denominación debe ser una cadena de texto.' }) // Valida que sea string
   @IsNotEmpty({ message: 'La denominación no puede estar vacía.' }) // Valida que no esté vacía
   @MaxLength(255, { message: 'La denominación no puede estar vacía.' })
@@ -26,7 +31,7 @@ export class CreateProductoDto {
   @Matches(/^[\w áéíóúÁÉÍÓÚñÑ.\-/%]+$/, {
     message: 'La denominación contiene caracteres inválidos ',
   })
-  denominacion: string;
+  denominacion?: string;
 
   @IsOptional()
   @IsString()
