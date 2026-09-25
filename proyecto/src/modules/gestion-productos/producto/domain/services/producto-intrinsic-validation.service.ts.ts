@@ -14,6 +14,8 @@ export class ProductoIntrinsicValidationService {
     precioMayorista?: number;
     precioCliente?: number;
     precioOcasional?: number;
+    utilizaStockMinimo?: boolean;
+    stockMinimo?: number;
   }): void {
     this.validarDenominacion(datos.denominacion);
     this.validarIds(datos.marcaId, datos.lineaId);
@@ -22,6 +24,7 @@ export class ProductoIntrinsicValidationService {
       datos.precioCliente,
       datos.precioOcasional,
     );
+    this.validarStockMinimo(datos.utilizaStockMinimo, datos.stockMinimo);
     
     if (datos.alicuotaIva !== undefined) {
       this.validarAlicuotaIva(datos.alicuotaIva);
@@ -35,6 +38,17 @@ export class ProductoIntrinsicValidationService {
     if (denominacion.length > 200) {
       throw new BadRequestException(
         'La denominación no puede superar 200 caracteres',
+      );
+    }
+  }
+
+  private validarStockMinimo(
+    utilizaStockMinimo?: boolean,
+    stockMinimo?: number,
+  ): void {
+    if (utilizaStockMinimo === true && stockMinimo == null) {
+      throw new BadRequestException(
+        'El stock mínimo es obligatorio cuando se utiliza stock mínimo',
       );
     }
   }
