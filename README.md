@@ -128,8 +128,6 @@ docker-compose up -d
 |---|---|
 | API | http://localhost:3000 |
 | phpMyAdmin | http://localhost:8081 |
-| Metabase | http://localhost:3002 |
-| MySQL | localhost:3310 |
 
 ### Local
 
