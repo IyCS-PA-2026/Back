@@ -54,7 +54,8 @@ describe('Producto HTTP - presentación (CR-002)', () => {
     marcaId: marca.id,
     alicuotaIva: 21,
     utilizaStockMinimo: false,
-    precio: 100,
+    costo: 100,
+    porcentaje: 20,
     usuarioCreatedId: usuario.id,
     presentacion: { cantidad: 1.5, unidadMedida: 'l' },
   });
@@ -132,6 +133,19 @@ describe('Producto HTTP - presentación (CR-002)', () => {
       expect(presentacion.equals(Presentacion.crear(1.5, 'l'))).toBe(true);
     });
 
+    it.each([
+      ['costo negativo', { costo: -1 }],
+      ['margen negativo', { porcentaje: -5 }],
+      ['margen mayor al máximo', { porcentaje: 1000 }],
+    ])('400: %s', async (_caso, extra) => {
+      await request(app.getHttpServer())
+        .post('/producto')
+        .send({ ...bodyValido(), ...extra })
+        .expect(400);
+
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
     it('201: conserva la unidad de medida sin normalizar', async () => {
       await request(app.getHttpServer())
         .post('/producto')
@@ -166,6 +180,8 @@ describe('Producto HTTP - presentación (CR-002)', () => {
     it.each([
       ['utilizaPack', { utilizaPack: true }],
       ['cantidadPorPack', { cantidadPorPack: 6 }],
+      // CR-006: el precio se deriva de costo y margen, no se carga
+      ['precio', { precio: 150 }],
     ])('400: rechaza el campo eliminado %s', async (_campo, extra) => {
       await request(app.getHttpServer())
         .post('/producto')

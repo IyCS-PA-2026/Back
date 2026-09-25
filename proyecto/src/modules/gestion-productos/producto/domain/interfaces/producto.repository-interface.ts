@@ -84,4 +84,9 @@ export interface IProductoRepository {
   existsProductosActivosByLinea(lineaId: number): Promise<boolean>;
 
   findByIds(ids: number[]): Promise<Producto[]>;
+
+  // CR-006: lineaId undefined = todos los productos activos
+  findActivosParaActualizacionPrecio(lineaId?: number): Promise<Producto[]>;
+  // CR-006: persiste margen y precio de todos los productos en una única transacción
+  guardarPreciosEnLote(productos: Producto[], usuario: Usuario): Promise<void>;
 }

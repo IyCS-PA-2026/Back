@@ -19,6 +19,8 @@ import { ProductoRelatedEntitiesValidator } from './infraestructure/validators/p
 import { ProductoValidationService } from './domain/services/producto-validation.service.ts';
 import { ProductoIntrinsicValidationService } from './domain/services/producto-intrinsic-validation.service.ts';
 import { ProductoDeletePolicy } from './application/policies/producto-delete.policy';
+import { ActualizacionMasivaPreciosController } from './application/controllers/actualizacion-masiva-precios.controller';
+import { ActualizacionMasivaPreciosService } from './domain/services/actualizacion-masiva-precios.service';
 
 
 @Module({
@@ -31,10 +33,11 @@ import { ProductoDeletePolicy } from './application/policies/producto-delete.pol
     UsuarioModule,
   ],
 
-  controllers: [ProductoController],
-  
+  controllers: [ProductoController, ActualizacionMasivaPreciosController],
+
   providers: [
     ProductoService,
+    ActualizacionMasivaPreciosService,
     ProductoIntrinsicValidationService,
     ProductoValidationService,
     ProductoRelatedEntitiesValidator,

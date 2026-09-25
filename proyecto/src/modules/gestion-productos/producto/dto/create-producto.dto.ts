@@ -10,9 +10,12 @@ import {
   IsInt,
   IsEnum,
   ValidateNested,
+  Min,
+  Max,
 } from 'class-validator';
 import { AlicuotaIva } from 'src/modules/organizacion/enums/alicuota-iva.enum';
 import { PresentacionDto } from './presentacion.dto';
+import { MARGEN_MAXIMO } from '../domain/entities/producto.entity';
 
 export class CreateProductoDto {
   @Transform(({ value }) => value.trim().toLowerCase())
@@ -77,6 +80,7 @@ export class CreateProductoDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(0, { message: 'El costo no puede ser negativo.' })
   costo?: number;
 
   // CR-002: obligatoria al crear. Si falta, @ValidateNested la rechaza
@@ -99,13 +103,12 @@ export class CreateProductoDto {
   marcaId: number;
 
 
+  // Margen (%). El precio no se recibe: lo deriva Producto.calcularPrecio()
   @IsOptional()
   @IsNumber()
+  @Min(0, { message: 'El margen no puede ser negativo.' })
+  @Max(MARGEN_MAXIMO, { message: `El margen no puede superar ${MARGEN_MAXIMO}.` })
   porcentaje?: number;
-
-  @IsOptional()
-  @IsNumber()
-  precio: number;
 
   createdAt?: Date;
 

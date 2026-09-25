@@ -141,6 +141,14 @@ export class ProductoRepository implements IProductoRepository {
     return this.persistenceService.actualizarPrecio(id, dto, usuario);
   }
 
+  async findActivosParaActualizacionPrecio(lineaId?: number): Promise<Producto[]> {
+    return this.persistenceService.findActivosParaActualizacionPrecio(lineaId);
+  }
+
+  async guardarPreciosEnLote(productos: Producto[], usuario: Usuario): Promise<void> {
+    return this.persistenceService.guardarPreciosEnLote(productos, usuario);
+  }
+
 
   async findByDenominacion(denominacion: string): Promise<Producto | null> {
     const entity =

@@ -60,6 +60,7 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
         usuarioCreated: usuario,
       });
       nuevaEntity.presentacion = presentacion;
+      nuevaEntity.recalcularPrecio();
 
       this.logger.debug('Entity creada:', nuevaEntity);
 
@@ -191,6 +192,7 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
       if (presentacion) {
         entity.presentacion = presentacion;
       }
+      entity.recalcularPrecio();
 
       entity.usuarioUpdated = usuario; 
       const entityActualizada = await repo.save(entity);
@@ -399,6 +401,30 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
 
     await repo.save(entity);
 
+  }
+
+  async findActivosParaActualizacionPrecio(lineaId?: number): Promise<Producto[]> {
+    return this.repository.find({
+      where: {
+        deletedAt: IsNull(),
+        ...(lineaId !== undefined && { lineaId }),
+      },
+    });
+  }
+
+  // Solo se escriben costo, margen y precio: si un update falla, @Transactional revierte todo el lote
+  @Transactional()
+  async guardarPreciosEnLote(productos: Producto[], usuario: Usuario): Promise<void> {
+    const repo = this.uow.getRepository(Producto);
+    for (const producto of productos) {
+      await repo.update(producto.id, {
+        costo: producto.costo,
+        fechaCosto: producto.fechaCosto,
+        porcentaje: producto.porcentaje,
+        precio: producto.precio,
+        usuarioUpdated: usuario,
+      });
+    }
   }
 
   async findByDenominacion(denominacion: string): Promise<Producto | null> {

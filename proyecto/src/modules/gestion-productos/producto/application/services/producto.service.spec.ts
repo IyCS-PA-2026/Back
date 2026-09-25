@@ -48,7 +48,7 @@ describe('ProductoService - presentación (CR-002)', () => {
       marcaId: marca.id,
       alicuotaIva: 21,
       utilizaStockMinimo: false,
-      precio: 100,
+      costo: 100,
       usuarioCreatedId: usuario.id,
       presentacion,
     }) as CreateProductoDto;
@@ -124,7 +124,7 @@ describe('ProductoService - presentación (CR-002)', () => {
   describe('update (R6)', () => {
     it('sin presentación en el DTO conserva la actual (pasa undefined al repositorio)', async () => {
       await service.update(10, {
-        precio: 150,
+        costo: 150,
         usuarioUpdatedId: usuario.id,
       } as UpdateProductoDto);
 
