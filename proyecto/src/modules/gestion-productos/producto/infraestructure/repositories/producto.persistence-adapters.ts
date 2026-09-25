@@ -14,6 +14,7 @@ import { CreateProductoDto } from '../../dto/create-producto.dto';
 import { UpdatePrecioDto } from '../../dto/update-precio.dto';
 import { UpdateProductoDto } from '../../dto/update-producto.dto';
 import { ProductoMapper } from '../../mappers/producto.mapper';
+import { Presentacion } from '../../domain/value-objects/presentacion.vo';
 
 
 @Injectable()
@@ -36,6 +37,7 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
     linea: Linea,
     marca: Marca,
     usuario: Usuario,
+    presentacion: Presentacion,
   ): Promise<Producto> {
     const repo = this.uow.getRepository(Producto);
     this.logger.log(`Creando un nuevo p ${this.ENTITY_NAME}`);
@@ -48,12 +50,16 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
       this.logger.debug('Marca:', marca);
       this.logger.debug('Usuario:', usuario);
 
+      // CR-002: se persiste el VO ya validado, no el objeto plano del DTO
+      const { presentacion: _presentacionDto, ...datos } = data;
+
       const nuevaEntity = repo.create({
-        ...data,
+        ...datos,
         linea,
         marca,
         usuarioCreated: usuario,
       });
+      nuevaEntity.presentacion = presentacion;
 
       this.logger.debug('Entity creada:', nuevaEntity);
 
@@ -162,6 +168,7 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
     marca: Marca,
 
     usuario: Usuario,
+    presentacion?: Presentacion,
   ): Promise<Producto> {
     const repo = this.uow.getRepository(Producto);
     try {
@@ -170,8 +177,9 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
       if (!entity) {
         throw new NotFoundException(`EL prodcuto con ID ${id} no encontrada`);
       }
+      // CR-002: la presentación del DTO no se copia; se asigna el VO validado
       const {
-
+        presentacion: _presentacionDto,
         ...dataSinItems
       } = data;
 
@@ -179,6 +187,10 @@ export class ProductoPersistenceAdapter implements IProductoRepository {
         linea,
         marca,
       });
+
+      if (presentacion) {
+        entity.presentacion = presentacion;
+      }
 
       entity.usuarioUpdated = usuario; 
       const entityActualizada = await repo.save(entity);
