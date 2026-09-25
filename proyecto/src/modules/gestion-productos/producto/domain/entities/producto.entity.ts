@@ -172,4 +172,17 @@ export class Producto {
 
   @Column({ type: 'text', nullable: true })
   codigoReferencia?: string | null;
+
+  static generarDenominacionSugerida(
+    marca: Pick<Marca, 'denominacion'>,
+    linea: Pick<Linea, 'denominacion'>,
+    presentacion: Presentacion,
+  ): string {
+    return [
+      marca.denominacion,
+      linea.denominacion,
+      presentacion.cantidad,
+      presentacion.unidadMedida,
+    ].join(' ');
+  }
 }
