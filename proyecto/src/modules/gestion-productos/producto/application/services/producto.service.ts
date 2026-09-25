@@ -320,6 +320,8 @@ export class ProductoService {
       marcaId: dto.marcaId,
       lineaId: dto.lineaId,
       alicuotaIva: dto.alicuotaIva,
+      utilizaStockMinimo: dto.utilizaStockMinimo,
+      stockMinimo: dto.stockMinimo,
     });
 
     // Validar unicidad (Infrastructure - DB)
@@ -382,7 +384,9 @@ export class ProductoService {
       marcaId: dto.marcaId ?? productoActual.marcaId,
       lineaId: dto.lineaId ?? productoActual.lineaId,
       alicuotaIva: dto.alicuotaIva ?? productoActual.alicuotaIva,
-
+      utilizaStockMinimo:
+        dto.utilizaStockMinimo ?? productoActual.utilizaStockMinimo,
+      stockMinimo: dto.stockMinimo ?? productoActual.stockMinimo,
     });
 
     // Validar unicidad (excluyendo el ID actual)
