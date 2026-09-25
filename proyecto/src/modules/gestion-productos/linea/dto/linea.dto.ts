@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { ReferenciaDto } from 'src/modules/common/utils/mappers/referencia.mapper';
 import {
   IsBoolean,
   IsInt,
@@ -36,6 +37,12 @@ export class LineaDto {
   })
   @IsString()
   observacion: string;
+
+  @ApiProperty({
+    example: { id: 1, denominacion: 'ferreteria' },
+    description: 'SuperLínea que agrupa a la línea (id 0 si no tiene)',
+  })
+  superLinea: ReferenciaDto;
 
   @ApiProperty({
     example: 1,

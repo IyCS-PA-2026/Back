@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DatabaseConnectionException } from 'src/modules/common/exceptions/database-connection.exception';
 import { EntityNotFoundException } from 'src/modules/common/exceptions/entity-notFound-exceptions';
-import { Repository, DataSource } from 'typeorm';
+import { Repository, DataSource, SelectQueryBuilder } from 'typeorm';
 import { CreateLineaDto } from '../../dto/create-linea.dto';
 import { Linea } from '../../domain/entities/linea.entity';
 import { ILineaRepository } from '../../domain/interfaces/linea.repository.interface';
@@ -35,6 +35,12 @@ export class LineaPersistenceAdapter
     super(repository);
   }
 
+  protected baseQuery(incluirEliminados = false): SelectQueryBuilder<Linea> {
+    return super
+      .baseQuery(incluirEliminados)
+      .leftJoinAndSelect(`${this.ALIAS}.superLinea`, 'superLinea');
+  }
+
   @Transactional()
   async create(data: CreateLineaDto): Promise<Linea> {
     const repo = this.uow.getRepository(Linea);
@@ -47,6 +53,7 @@ export class LineaPersistenceAdapter
         stockMinimo: data.stockMinimo,
         usuarioCreatedId: data.usuarioCreatedId,
         observacion: data.observacion,
+        superLineaId: data.superLineaId ?? null,
       });
 
       const entityGuardada = await repo.save(nuevaEntity);
@@ -82,6 +89,11 @@ export class LineaPersistenceAdapter
     entity.stockMinimo = data.stockMinimo ?? 0;
     entity.usuarioCreatedId = data.usuarioCreatedId;
 
+    // undefined: no se toca la agrupación; null: se desagrupa la línea
+    if (data.superLineaId !== undefined) {
+      entity.superLineaId = data.superLineaId;
+    }
+
     // Guardar entidad antes de procesar sublíneas (opcional según lógica de negocio)
     const entityActualizada = await repo.save(entity);
 
@@ -90,10 +102,8 @@ export class LineaPersistenceAdapter
 
   async findOne(id: number): Promise<Linea | null> {
     try {
-      const entity = await this.repository
-        .createQueryBuilder('linea')
-        .where('linea.id = :id', { id })
-        .andWhere('linea.deletedAt IS NULL')
+      const entity = await this.baseQuery()
+        .andWhere('linea.id = :id', { id })
         .getOne();
 
       this.logger.warn(`Entidad obtenida: ${JSON.stringify(entity)}`);

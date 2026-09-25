@@ -17,6 +17,7 @@ import { LineaDto } from '../../dto/linea.dto';
 import { LineaMapper } from '../../mappers/linea.mapper';
 import { PoliticaEliminacionLinea } from '../../domain/services/politica-eliminacion-linea.service';
 import { Linea } from '../../domain/entities/linea.entity';
+import { SuperLineaService } from '../../../super-linea/application/services/super-linea.service';
 
 @Injectable()
 export class LineaService {
@@ -28,6 +29,7 @@ export class LineaService {
     @Inject(forwardRef(() => PoliticaEliminacionLinea))
     private readonly validacionesService: PoliticaEliminacionLinea,
     private readonly usuarioService: UsuarioService,
+    private readonly superLineaService: SuperLineaService,
 
   ) { }
 
@@ -38,7 +40,7 @@ export class LineaService {
       `Creando un nuevo ${this.ENTITY_NAME} con denominación: ${dto.denominacion} a: ${dto.denominacion}`,
     );
     await this.checkDenominacionExists(dto.denominacion, 0);
-
+    await this.checkSuperLineaExists(dto.superLineaId);
 
     const entity = await this.repository.create(dto);
 
@@ -58,7 +60,7 @@ export class LineaService {
     ensureNotSistemaEntity(linea, 'Linea');
     if (dto.denominacion)
       await this.checkDenominacionExists(dto.denominacion, id);
-
+    await this.checkSuperLineaExists(dto.superLineaId);
 
     const entity = await this.repository.update(id, dto);
     return MessageFrontUtils.createSimple(
@@ -196,6 +198,11 @@ export class LineaService {
     this.logger.log(`✅ Denominación disponible`);
   }
 
+  // Sin superLineaId (undefined o null) la línea queda sin agrupar
+  private async checkSuperLineaExists(superLineaId?: number | null) {
+    if (superLineaId == null) return;
+    await this.superLineaService.findEntityById(superLineaId);
+  }
 
   async findAllListado(): Promise<Linea[]> {
     const result = await this.repository.findAllListado();
