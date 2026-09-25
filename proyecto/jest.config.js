@@ -19,6 +19,14 @@ module.exports = {
         functions: 100,
         lines: 100,
       },
+      // CR-007: 100% sobre la regla precio > 0 y las validaciones de HistorialPrecio.
+      // Justificación en docs/CR-007-historial-precios.md
+      './src/modules/gestion-productos/producto/domain/entities/historial-precio.entity.ts': {
+        statements: 100,
+        branches: 100,
+        functions: 100,
+        lines: 100,
+      },
     },
     moduleNameMapper: {
     '^src/(.*)$': '<rootDir>/src/$1',

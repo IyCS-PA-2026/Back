@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { UsuarioValidator } from 'src/modules/common/utils/validation/usuario-validator';
 import { EntityNotFoundException } from 'src/modules/common/exceptions/entity-notFound-exceptions';
 import { Producto } from '../entities/producto.entity';
+import { HistorialPrecio } from '../entities/historial-precio.entity';
 import { ActualizacionMasivaPreciosService } from './actualizacion-masiva-precios.service';
 import { ActualizacionMasivaPreciosDto } from '../../dto/actualizacion-masiva-precios.dto';
 import {
@@ -32,7 +33,7 @@ describe('ActualizacionMasivaPreciosService (CR-006)', () => {
         .filter(([, p]) => lineaId === undefined || p.lineaId === lineaId)
         .map(([id]) => aProducto(id)),
     ),
-    guardarPreciosEnLote: jest.fn(async (productos: Producto[], _usuario: unknown) => {
+    guardarPreciosEnLote: jest.fn(async (productos: Producto[], _usuario: unknown, _historial: HistorialPrecio[]) => {
       for (const p of productos) {
         base.set(p.id, { ...base.get(p.id)!, costo: p.costo, porcentaje: p.porcentaje!, precio: p.precio! });
       }
@@ -174,5 +175,87 @@ describe('ActualizacionMasivaPreciosService (CR-006)', () => {
     }
     expect(productoRepository.guardarPreciosEnLote.mock.calls[0][1]).toBe(usuario);
     calcularPrecio.mockRestore();
+  });
+
+  /*
+    CR-007 — cada cambio de precio del lote genera su HistorialPrecio, que se
+    valida (precio > 0) junto con el resto ANTES de persistir y viaja en la
+    misma llamada (misma transacción) que los precios.
+  */
+  describe('historial de precios (CR-007)', () => {
+    const historialGuardado = (): HistorialPrecio[] =>
+      productoRepository.guardarPreciosEnLote.mock.calls[0][2];
+
+    it('registra un historial por cada producto cuyo precio cambió, en la misma llamada que los precios', async () => {
+      await service.ejecutar(
+        dto({ alcance: AlcanceActualizacionPrecios.GLOBAL, modalidad: ModalidadActualizacionPrecios.PORCENTAJE, valor: 30 }),
+      );
+
+      expect(productoRepository.guardarPreciosEnLote).toHaveBeenCalledTimes(1);
+      const historial = historialGuardado();
+      expect(historial).toHaveLength(3);
+      expect(historial.every((h) => h instanceof HistorialPrecio)).toBe(true);
+      expect(historial).toEqual([
+        expect.objectContaining({ productoId: 10, precioAnterior: 120, precioNuevo: 130 }),
+        expect.objectContaining({ productoId: 11, precioAnterior: 300, precioNuevo: 260 }),
+        expect.objectContaining({ productoId: 12, precioAnterior: 55, precioNuevo: 65 }),
+      ]);
+    });
+
+    it('el motivo describe la operación: modalidad, valor y alcance', async () => {
+      await service.ejecutar(
+        dto({ alcance: AlcanceActualizacionPrecios.GLOBAL, modalidad: ModalidadActualizacionPrecios.PORCENTAJE, valor: 30 }),
+      );
+      expect(historialGuardado()[0].motivo).toBe('Actualización masiva por porcentaje: margen 30% (global)');
+
+      jest.clearAllMocks();
+      await service.ejecutar(
+        dto({ alcance: AlcanceActualizacionPrecios.LINEA, lineaId: LINEA_ACEITES, modalidad: ModalidadActualizacionPrecios.MONTO, valor: -10 }),
+      );
+      expect(historialGuardado()[0].motivo).toBe('Actualización masiva por monto: -10 al costo (línea 1)');
+
+      jest.clearAllMocks();
+      await service.ejecutar(
+        dto({ alcance: AlcanceActualizacionPrecios.GLOBAL, modalidad: ModalidadActualizacionPrecios.MONTO, valor: 5 }),
+      );
+      expect(historialGuardado()[0].motivo).toBe('Actualización masiva por monto: +5 al costo (global)');
+    });
+
+    it('los productos cuyo precio no cambia se actualizan pero no generan historial', async () => {
+      // ACEITE GIRASOL ya tiene margen 20: su precio queda igual
+      await service.ejecutar(
+        dto({ alcance: AlcanceActualizacionPrecios.LINEA, lineaId: LINEA_ACEITES, modalidad: ModalidadActualizacionPrecios.PORCENTAJE, valor: 20 }),
+      );
+
+      expect(productoRepository.guardarPreciosEnLote.mock.calls[0][0]).toHaveLength(2);
+      expect(historialGuardado()).toEqual([expect.objectContaining({ productoId: 11, precioAnterior: 300, precioNuevo: 240 })]);
+    });
+
+    it('regla precio > 0: si un producto quedaría con precio 0 se rechaza TODA la operación antes de persistir', async () => {
+      const antes = snapshot();
+
+      // -50 al costo: HARINA 000 pasa de costo 50 a 0 → precio 0. El costo 0 es válido para Producto,
+      // pero el historial exige precio > 0.
+      const error = await service
+        .ejecutar(dto({ alcance: AlcanceActualizacionPrecios.GLOBAL, modalidad: ModalidadActualizacionPrecios.MONTO, valor: -50 }))
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect(error.message).toContain('no se modificó ningún producto');
+      expect(error.message).toContain('Producto "HARINA 000": El precio nuevo (0) debe ser mayor a 0.');
+      expect(productoRepository.guardarPreciosEnLote).not.toHaveBeenCalled();
+      expect(snapshot()).toEqual(antes);
+    });
+
+    it('un producto sin precio que sigue sin precio no bloquea la operación ni genera historial', async () => {
+      base.set(13, { lineaId: LINEA_HARINAS, denominacion: 'HARINA 0000', costo: 0, porcentaje: 10, precio: 0 });
+
+      const resultado = await service.ejecutar(
+        dto({ alcance: AlcanceActualizacionPrecios.LINEA, lineaId: LINEA_HARINAS, modalidad: ModalidadActualizacionPrecios.PORCENTAJE, valor: 40 }),
+      );
+
+      expect(resultado).toEqual({ productosActualizados: 2 });
+      expect(historialGuardado()).toEqual([expect.objectContaining({ productoId: 12, precioNuevo: 70 })]);
+    });
   });
 });

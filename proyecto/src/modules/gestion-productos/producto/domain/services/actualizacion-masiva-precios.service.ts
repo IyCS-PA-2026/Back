@@ -3,6 +3,7 @@ import { UsuarioValidator } from 'src/modules/common/utils/validation/usuario-va
 import { EntityNotFoundException } from 'src/modules/common/exceptions/entity-notFound-exceptions';
 import { ILineaRepository } from 'src/modules/gestion-productos/linea/domain/interfaces/linea.repository.interface';
 import { IProductoRepository } from '../interfaces/producto.repository-interface';
+import { HistorialPrecio } from '../entities/historial-precio.entity';
 import { ActualizacionMasivaPreciosDto } from '../../dto/actualizacion-masiva-precios.dto';
 import {
   AlcanceActualizacionPrecios,
@@ -53,15 +54,21 @@ export class ActualizacionMasivaPreciosService {
     const productos =
       await this.productoRepository.findActivosParaActualizacionPrecio(lineaId);
 
-    // Validación previa de TODO el conjunto: los cambios quedan solo en memoria
+    // Validación previa de TODO el conjunto: los cambios quedan solo en memoria.
+    // CR-007: el registro de historial (regla precio > 0) también se crea y valida acá, antes de persistir.
+    const motivo = this.motivoHistorial(dto, lineaId);
     const rechazos: string[] = [];
+    const historial: HistorialPrecio[] = [];
     for (const producto of productos) {
       try {
+        const precioAnterior = producto.precio ?? 0;
         if (dto.modalidad === ModalidadActualizacionPrecios.PORCENTAJE) {
           producto.aplicarMargen(dto.valor);
         } else {
           producto.aplicarCosto((producto.costo ?? 0) + dto.valor);
         }
+        const cambioDePrecio = producto.registrarCambioDePrecio(precioAnterior, motivo);
+        if (cambioDePrecio) historial.push(cambioDePrecio);
       } catch (error) {
         rechazos.push(error instanceof Error ? error.message : String(error));
       }
@@ -73,12 +80,22 @@ export class ActualizacionMasivaPreciosService {
       );
     }
 
-    await this.productoRepository.guardarPreciosEnLote(productos, usuario);
+    await this.productoRepository.guardarPreciosEnLote(productos, usuario, historial);
 
     this.logger.log(
       `Actualización masiva (${dto.alcance}, ${dto.modalidad} ${dto.valor}): ${productos.length} productos`,
     );
 
     return { productosActualizados: productos.length };
+  }
+
+  // Ej.: "Actualización masiva por porcentaje: margen 30% (línea 2)"
+  private motivoHistorial(dto: ActualizacionMasivaPreciosDto, lineaId?: number): string {
+    const detalle =
+      dto.modalidad === ModalidadActualizacionPrecios.PORCENTAJE
+        ? `margen ${dto.valor}%`
+        : `${dto.valor >= 0 ? '+' : ''}${dto.valor} al costo`;
+    const alcance = lineaId !== undefined ? `línea ${lineaId}` : 'global';
+    return `Actualización masiva por ${dto.modalidad}: ${detalle} (${alcance})`;
   }
 }

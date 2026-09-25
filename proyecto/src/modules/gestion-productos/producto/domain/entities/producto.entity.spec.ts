@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { Producto } from './producto.entity';
+import { HistorialPrecio } from './historial-precio.entity';
 
 /*
   CR-006 — Precio derivado: Precio = Costo × (1 + Margen / 100).
@@ -44,5 +45,71 @@ describe('Producto - precio derivado (CR-006)', () => {
     const p = Object.assign(producto(100, 20), { precio: 120 });
     expect(() => aplicar(p)).toThrow(BadRequestException);
     expect(p).toMatchObject({ costo: 100, porcentaje: 20, precio: 120 });
+  });
+});
+
+/*
+  CR-007 — Producto registra sus propios cambios de precio en HistorialPrecio.
+*/
+describe('Producto - historial de precios (CR-007)', () => {
+  const producto = (costo: number, porcentaje: number) => {
+    const p = Object.assign(new Producto(), { id: 7, denominacion: 'YERBA', costo, porcentaje });
+    p.recalcularPrecio();
+    return p;
+  };
+
+  it('si el precio cambió devuelve el registro con precio anterior, nuevo y motivo', () => {
+    const p = producto(100, 20);
+    p.aplicarMargen(30);
+
+    const registro = p.registrarCambioDePrecio(120, 'Edición de producto');
+
+    expect(registro).toBeInstanceOf(HistorialPrecio);
+    expect(registro).toMatchObject({ productoId: 7, precioAnterior: 120, precioNuevo: 130, motivo: 'Edición de producto' });
+    expect(registro!.fecha).toBeInstanceOf(Date);
+  });
+
+  it('si el precio no cambió no registra nada', () => {
+    const p = producto(100, 20);
+    p.aplicarMargen(20);
+    expect(p.registrarCambioDePrecio(120, 'Edición de producto')).toBeNull();
+  });
+
+  it('compara con la precisión con la que se guarda el precio (2 decimales)', () => {
+    const p = producto(100, 20);
+    expect(p.registrarCambioDePrecio(120.001, 'Edición de producto')).toBeNull();
+  });
+
+  it('alta con precio: registro inicial sin precio anterior', () => {
+    expect(producto(100, 20).registrarCambioDePrecio(null, 'Alta de producto')).toMatchObject({
+      precioAnterior: null,
+      precioNuevo: 120,
+    });
+  });
+
+  it('alta sin precio (sin costo): no registra ni rechaza el alta', () => {
+    expect(producto(0, 20).registrarCambioDePrecio(null, 'Alta de producto')).toBeNull();
+  });
+
+  it('producto sin precio que pasa a tener precio: registra desde 0', () => {
+    const p = producto(0, 20);
+    p.aplicarCosto(50);
+    expect(p.registrarCambioDePrecio(0, 'Edición de producto')).toMatchObject({ precioAnterior: 0, precioNuevo: 60 });
+  });
+
+  it('regla precio > 0: un cambio que deja el precio en 0 se rechaza nombrando al producto', () => {
+    const p = producto(100, 20);
+    p.aplicarCosto(0);
+
+    expect(() => p.registrarCambioDePrecio(120, 'Edición de producto')).toThrow(BadRequestException);
+    expect(() => p.registrarCambioDePrecio(120, 'Edición de producto')).toThrow(
+      'Producto "YERBA": El precio nuevo (0) debe ser mayor a 0.',
+    );
+  });
+
+  it('no modifica el precio del producto (solo lo lee)', () => {
+    const p = producto(100, 20);
+    p.registrarCambioDePrecio(90, 'Edición de producto');
+    expect(p.precio).toBe(120);
   });
 });

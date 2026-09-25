@@ -28,6 +28,7 @@ import { ProductoUniquenessValidator } from '../../infraestructure/validators/pr
 import { UsuarioValidator } from 'src/modules/common/utils/validation/usuario-validator';
 import { ProductoDeletePolicy } from '../policies/producto-delete.policy';
 import { Presentacion } from '../../domain/value-objects/presentacion.vo';
+import { HistorialPrecioDto } from '../../dto/historial-precio.dto';
 @Injectable()
 export class ProductoService {
   private readonly logger = new Logger(ProductoService.name);
@@ -199,6 +200,15 @@ export class ProductoService {
       );
     this.logger.log(`b1x`);
     return ProductoMapper.toDto(entity);
+  }
+
+  // CR-007: el producto debe existir (el repositorio lanza 404 si no)
+  async findHistorialPrecios(id: number): Promise<HistorialPrecioDto[]> {
+    await this.findEntityById(id);
+    const historial = await this.repository.findHistorialPrecios(id);
+    return historial.map((registro) =>
+      ProductoMapper.toHistorialPrecioDto(registro),
+    );
   }
 
   async findEntityById(id: number) {

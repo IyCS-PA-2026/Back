@@ -6,6 +6,8 @@ import { Usuario } from 'src/modules/gestion-usuario/usuario/domain/entities/usu
 import { ProductoDto } from '../dto/producto.dto';
 import { PresentacionDto } from '../dto/presentacion.dto';
 import { Presentacion } from '../domain/value-objects/presentacion.vo';
+import { HistorialPrecio } from '../domain/entities/historial-precio.entity';
+import { HistorialPrecioDto } from '../dto/historial-precio.dto';
 
 import {
   toReferenciaDto,
@@ -106,8 +108,20 @@ export class ProductoMapper {
       sistema: entity.sistema,
       codigoReferencia: entity.codigoReferencia ?? '',
 
-    
-      
+
+
+    };
+  }
+
+  // CR-007
+  static toHistorialPrecioDto(entity: HistorialPrecio): HistorialPrecioDto {
+    return {
+      id: entity.id,
+      productoId: entity.productoId,
+      precioAnterior: entity.precioAnterior,
+      precioNuevo: entity.precioNuevo,
+      fecha: entity.fecha,
+      motivo: entity.motivo,
     };
   }
 

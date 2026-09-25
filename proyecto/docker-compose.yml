@@ -1,9 +1,4 @@
-# Entorno local completo: base, API y front.
-#   docker compose up -d --build
-# API:        http://localhost:3000/api (Swagger en la misma URL)
-# Front:      http://localhost:5173  (admin@gmail.com / admin123)
-# phpMyAdmin: http://localhost:8081
-# Requiere el repo del front en ../../Front (misma estructura que Uni/Proyecto).
+version: '3.8'
 
 services:
   mysql:
@@ -21,11 +16,6 @@ services:
       - mysql_data:/var/lib/mysql
     networks:
       - app-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uadmin", "-padmin"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
@@ -41,72 +31,23 @@ services:
     networks:
       - app-network
 
-  api:
+  backend:
     build:
       context: .
+      dockerfile: Dockerfile
       target: development
-    container_name: proyecto-api
-    restart: unless-stopped
-    depends_on:
-      mysql:
-        condition: service_healthy
-    # Aplica las migraciones pendientes y levanta Nest en modo watch
-    command: sh -c "yarn migration:run && yarn start:dev"
-    environment:
-      DB_TYPE: mysql
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_USERNAME: admin
-      DB_PASSWORD: admin
-      DB_DATABASE: proyecto
-      DB_SSL: "false"
-      PORT: 3000
-      JWT_SECRET: ${JWT_SECRET:-dev-secret-solo-local}
-      JWT_EXPIRATION_ACCESS: ${JWT_EXPIRATION_ACCESS:-60s}
-      JWT_EXPIRATION_REFRESH: ${JWT_EXPIRATION_REFRESH:-7d}
-      PUNTO_VENTA_ACTIVO_ID: 2
-      # Detecta cambios en src montado desde Windows/macOS
-      TSC_WATCHFILE: DynamicPriorityPolling
+    container_name: proyecto-backend
+    restart: always
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     volumes:
-      - ./src:/usr/src/app/src
-    networks:
-      - app-network
-    healthcheck:
-      # 127.0.0.1 y no localhost: en alpine localhost resuelve a IPv6 y Nest escucha en IPv4
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/empresa"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
-
-  # Carga los datos iniciales (roles, admin, empresas, líneas...). Es idempotente.
-  seed:
-    image: curlimages/curl:8.10.1
-    container_name: proyecto-seed
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    command: yarn run start:dev
     depends_on:
-      api:
-        condition: service_healthy
-    command: ["-sf", "http://api:3000/api/seed-all/execute"]
-    restart: "no"
-    networks:
-      - app-network
-
-  front:
-    build:
-      context: ../../Front
-    container_name: proyecto-front
-    restart: unless-stopped
-    depends_on:
-      - api
-    environment:
-      # Lo usa el navegador, por eso apunta al puerto publicado en el host
-      VITE_API_URL: http://localhost:3000/api
-    ports:
-      - "5173:5173"
-    volumes:
-      - ../../Front/src:/app/src
+      - mysql
     networks:
       - app-network
 

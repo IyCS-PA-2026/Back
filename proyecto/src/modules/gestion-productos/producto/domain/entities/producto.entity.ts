@@ -21,6 +21,7 @@ import { Proveedor } from 'src/modules/organizacion/proveedor/domain/entities/pr
 import { Presentacion } from '../value-objects/presentacion.vo';
 import { BadRequestException } from '@nestjs/common';
 import { redondear } from 'src/modules/common/utils/number/redondeo';
+import { HistorialPrecio } from './historial-precio.entity';
 
 // Límite de la columna del margen: decimal(5,2)
 export const MARGEN_MAXIMO = 999.99;
@@ -232,5 +233,37 @@ export class Producto {
   // Alta y edición: el precio nunca se carga, se deriva de costo y margen
   recalcularPrecio(): void {
     this.precio = this.calcularPrecio();
+  }
+
+  // ========== HISTORIAL DE PRECIOS (CR-007) ==========
+  // Devuelve el registro del cambio (sin persistir) o null si el precio no cambió.
+  // precioAnterior null = alta: sin precio todavía (precio 0) no hay nada que registrar.
+  // La regla precio > 0 la aplica HistorialPrecio.registrar.
+  registrarCambioDePrecio(
+    precioAnterior: number | null,
+    motivo: string,
+  ): HistorialPrecio | null {
+    const precioNuevo = this.precio ?? 0;
+
+    if (precioAnterior === null && precioNuevo === 0) return null;
+    if (
+      precioAnterior !== null &&
+      redondear(precioAnterior, 2) === redondear(precioNuevo, 2)
+    ) {
+      return null;
+    }
+
+    try {
+      return HistorialPrecio.registrar({
+        productoId: this.id,
+        precioAnterior,
+        precioNuevo,
+        motivo,
+      });
+    } catch (error) {
+      throw new BadRequestException(
+        `Producto "${this.denominacion}": ${error.message}`,
+      );
+    }
   }
 }

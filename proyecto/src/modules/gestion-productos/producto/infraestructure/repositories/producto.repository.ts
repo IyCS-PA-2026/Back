@@ -11,6 +11,7 @@ import { IUnitOfWork } from 'src/modules/common/unit-of-work/iunit-of-work.';
 import { Usuario } from 'src/modules/gestion-usuario/usuario/domain/entities/usuario.entity';
 import { UpdatePrecioDto } from '../../dto/update-precio.dto';
 import { Presentacion } from '../../domain/value-objects/presentacion.vo';
+import { HistorialPrecio } from '../../domain/entities/historial-precio.entity';
 
 @Injectable()
 export class ProductoRepository implements IProductoRepository {
@@ -145,8 +146,16 @@ export class ProductoRepository implements IProductoRepository {
     return this.persistenceService.findActivosParaActualizacionPrecio(lineaId);
   }
 
-  async guardarPreciosEnLote(productos: Producto[], usuario: Usuario): Promise<void> {
-    return this.persistenceService.guardarPreciosEnLote(productos, usuario);
+  async guardarPreciosEnLote(
+    productos: Producto[],
+    usuario: Usuario,
+    historial: HistorialPrecio[],
+  ): Promise<void> {
+    return this.persistenceService.guardarPreciosEnLote(productos, usuario, historial);
+  }
+
+  async findHistorialPrecios(productoId: number): Promise<HistorialPrecio[]> {
+    return this.persistenceService.findHistorialPrecios(productoId);
   }
 
 
