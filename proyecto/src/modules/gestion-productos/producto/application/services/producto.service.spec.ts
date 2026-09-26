@@ -14,6 +14,8 @@ import { ProductoDeletePolicy } from '../policies/producto-delete.policy';
 import { Presentacion } from '../../domain/value-objects/presentacion.vo';
 import { CreateProductoDto } from '../../dto/create-producto.dto';
 import { UpdateProductoDto } from '../../dto/update-producto.dto';
+import { Producto } from '../../domain/entities/producto.entity';
+import { AlicuotaIva } from 'src/modules/organizacion/enums/alicuota-iva.enum';
 
 /*
   CR-002 — Integración de Presentacion con los casos de uso de Producto.
@@ -200,6 +202,210 @@ describe('ProductoService - presentación (CR-002)', () => {
         } as UpdateProductoDto),
       ).rejects.toThrow(BadRequestException);
 
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+  });
+});
+
+/*
+  CR-001 — Validación de datos (US-001) en los casos de uso de Producto.
+  Integrado sobre el modelo actual: el alta lleva Presentacion (CR-002), una
+  denominación vacía en el alta se genera (CR-005) y el precio no se recibe,
+  se deriva de costo y margen (CR-006).
+*/
+describe('ProductoService - validación de datos (CR-001)', () => {
+  let service: ProductoService;
+  let repository: { create: jest.Mock; update: jest.Mock; findOne: jest.Mock };
+  let uniquenessValidator: {
+    validarDenominacionUnica: jest.Mock;
+    validarCodigoProveedorUnico: jest.Mock;
+  };
+
+  const buildCreateDto = (
+    overrides: Partial<CreateProductoDto> = {},
+  ): CreateProductoDto =>
+    ({
+      denominacion: 'arroz largo fino',
+      utilizaStockMinimo: false,
+      lineaId: 1,
+      marcaId: 1,
+      alicuotaIva: AlicuotaIva.ALICUOTA_21,
+      usuarioCreatedId: 1,
+      costo: 100,
+      stock: 10,
+      presentacion: { cantidad: 1, unidadMedida: 'kg' },
+      ...overrides,
+    }) as CreateProductoDto;
+
+  const buildUpdateDto = (
+    overrides: Partial<UpdateProductoDto> = {},
+  ): UpdateProductoDto =>
+    ({ usuarioUpdatedId: 1, ...overrides }) as UpdateProductoDto;
+
+  const buildProductoActual = (overrides: Partial<Producto> = {}): Producto =>
+    ({
+      id: 7,
+      denominacion: 'arroz largo fino',
+      marcaId: 1,
+      lineaId: 1,
+      alicuotaIva: AlicuotaIva.ALICUOTA_21,
+      utilizaStockMinimo: false,
+      stockMinimo: null,
+      ...overrides,
+    }) as unknown as Producto;
+
+  beforeEach(async () => {
+    repository = {
+      create: jest.fn().mockResolvedValue({ denominacion: 'arroz largo fino' }),
+      update: jest.fn().mockResolvedValue({ denominacion: 'arroz largo fino' }),
+      findOne: jest.fn(),
+    };
+    uniquenessValidator = {
+      validarDenominacionUnica: jest.fn().mockResolvedValue(undefined),
+      validarCodigoProveedorUnico: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ProductoService,
+        // Validación de dominio real: es lo que se quiere verificar
+        ProductoIntrinsicValidationService,
+        { provide: 'IProductoRepository', useValue: repository },
+        { provide: LineaService, useValue: {} },
+        { provide: MarcaService, useValue: {} },
+        { provide: ProveedorService, useValue: {} },
+        { provide: UsuarioService, useValue: {} },
+        {
+          provide: ProductoValidationService,
+          useValue: { validarEntidadesRelacionadas: jest.fn() },
+        },
+        {
+          provide: ProductoRelatedEntitiesValidator,
+          useValue: {
+            validarYObtenerEntidadesRelacionadas: jest.fn().mockResolvedValue({
+              marca: { id: 1, denominacion: 'Gallo' },
+              linea: { id: 1, denominacion: 'Arroz' },
+            }),
+          },
+        },
+        { provide: ProductoUniquenessValidator, useValue: uniquenessValidator },
+        {
+          provide: UsuarioValidator,
+          useValue: { validarUsuarioExiste: jest.fn().mockResolvedValue({ id: 1 }) },
+        },
+        { provide: ProductoDeletePolicy, useValue: {} },
+      ],
+    }).compile();
+
+    service = module.get<ProductoService>(ProductoService);
+  });
+
+  describe('create', () => {
+    it('CA7: con datos válidos y stock mínimo configurado, persiste el producto', async () => {
+      const dto = buildCreateDto({ utilizaStockMinimo: true, stockMinimo: 5 });
+
+      await expect(service.create(dto)).resolves.toBeDefined();
+      expect(repository.create).toHaveBeenCalledWith(
+        dto,
+        expect.objectContaining({ id: 1 }),
+        expect.objectContaining({ id: 1 }),
+        { id: 1 },
+        expect.any(Presentacion),
+      );
+    });
+
+    it('CA5: utilizaStockMinimo = true sin stockMinimo → rechaza y no persiste', async () => {
+      const dto = buildCreateDto({ utilizaStockMinimo: true });
+
+      await expect(service.create(dto)).rejects.toThrow(BadRequestException);
+      expect(uniquenessValidator.validarDenominacionUnica).not.toHaveBeenCalled();
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('CA6: utilizaStockMinimo = false sin stockMinimo → persiste', async () => {
+      await service.create(buildCreateDto({ utilizaStockMinimo: false }));
+      expect(repository.create).toHaveBeenCalledTimes(1);
+    });
+
+    // El CA3 original ("denominación vacía → rechaza") lo reemplaza CR-005 (US-006):
+    // en el alta, una denominación vacía se genera como Marca + Línea + Presentación.
+    it('CA3 (ajustado por CR-005): denominación vacía en el alta se genera en lugar de rechazarse', async () => {
+      await service.create(buildCreateDto({ denominacion: '' }));
+
+      expect(repository.create).toHaveBeenCalledTimes(1);
+      expect(repository.create.mock.calls[0][0].denominacion).toBe('Gallo Arroz 1 kg');
+    });
+  });
+
+  describe('update (combina valores nuevos con el estado actual)', () => {
+    it('CA5: activa utilizaStockMinimo sin stockMinimo en dto ni en el producto actual → rechaza', async () => {
+      repository.findOne.mockResolvedValue(
+        buildProductoActual({ utilizaStockMinimo: false, stockMinimo: null as any }),
+      );
+
+      await expect(
+        service.update(7, buildUpdateDto({ utilizaStockMinimo: true })),
+      ).rejects.toThrow(BadRequestException);
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('activa utilizaStockMinimo informando stockMinimo → persiste', async () => {
+      repository.findOne.mockResolvedValue(buildProductoActual());
+
+      await service.update(
+        7,
+        buildUpdateDto({ utilizaStockMinimo: true, stockMinimo: 4 }),
+      );
+      expect(repository.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('activa utilizaStockMinimo y toma el stockMinimo ya guardado en el producto → persiste', async () => {
+      repository.findOne.mockResolvedValue(
+        buildProductoActual({ utilizaStockMinimo: false, stockMinimo: 3 }),
+      );
+
+      await service.update(7, buildUpdateDto({ utilizaStockMinimo: true }));
+      expect(repository.update).toHaveBeenCalledTimes(1);
+    });
+
+    // CR-006: el precio ya no se edita; se usa el costo como campo ajeno al stock mínimo
+    it('producto actual con stock mínimo válido y dto sin esos campos → persiste', async () => {
+      repository.findOne.mockResolvedValue(
+        buildProductoActual({ utilizaStockMinimo: true, stockMinimo: 5 }),
+      );
+
+      await service.update(7, buildUpdateDto({ costo: 200 }));
+      expect(repository.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('CA6: desactiva utilizaStockMinimo → persiste aunque no haya stockMinimo', async () => {
+      repository.findOne.mockResolvedValue(
+        buildProductoActual({ utilizaStockMinimo: true, stockMinimo: null as any }),
+      );
+
+      await service.update(7, buildUpdateDto({ utilizaStockMinimo: false }));
+      expect(repository.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('producto actual inconsistente (utilizaStockMinimo = true, stockMinimo null) → rechaza cualquier modificación que no informe stockMinimo', async () => {
+      repository.findOne.mockResolvedValue(
+        buildProductoActual({ utilizaStockMinimo: true, stockMinimo: null as any }),
+      );
+
+      await expect(
+        service.update(7, buildUpdateDto({ costo: 200 })),
+      ).rejects.toThrow(
+        'El stock mínimo es obligatorio cuando se utiliza stock mínimo',
+      );
+      expect(repository.update).not.toHaveBeenCalled();
+    });
+
+    it('CA3: denominación vacía en la edición → rechaza (mensaje de CR-005)', async () => {
+      repository.findOne.mockResolvedValue(buildProductoActual());
+
+      await expect(
+        service.update(7, buildUpdateDto({ denominacion: '' })),
+      ).rejects.toThrow('La denominación no puede estar vacía.');
       expect(repository.update).not.toHaveBeenCalled();
     });
   });

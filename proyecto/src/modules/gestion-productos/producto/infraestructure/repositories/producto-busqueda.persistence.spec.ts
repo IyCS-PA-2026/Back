@@ -28,7 +28,9 @@ describe('ProductoPersistenceAdapter.findBy - consulta (CR-004)', () => {
       dataSource,
       {} as IUnitOfWork,
     );
-  });
+    // Compila todas las entidades del proyecto: supera los 5 s por defecto de Jest
+    // en máquinas lentas o volúmenes montados (Docker)
+  }, 60_000);
 
   beforeEach(() => {
     jest

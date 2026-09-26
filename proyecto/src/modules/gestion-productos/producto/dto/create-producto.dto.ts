@@ -117,10 +117,8 @@ export class CreateProductoDto {
   @Max(MARGEN_MAXIMO, { message: `El margen no puede superar ${MARGEN_MAXIMO}.` })
   porcentaje?: number;
 
-  @IsOptional()
-  @IsNumber()
-  @IsPositive({ message: 'El precio debe ser mayor que 0.' })
-  precio: number;
+  // CR-001 + CR-006: el precio no es un dato de entrada (forbidNonWhitelisted lo
+  // rechaza). La regla "precio resultante > 0" la valida HistorialPrecio (CR-007).
 
   createdAt?: Date;
 
