@@ -266,4 +266,18 @@ export class Producto {
       );
     }
   }
+
+  // ========== DENOMINACIÓN AUTOMÁTICA (CR-005) ==========
+  static generarDenominacionSugerida(
+    marca: Pick<Marca, 'denominacion'>,
+    linea: Pick<Linea, 'denominacion'>,
+    presentacion: Presentacion,
+  ): string {
+    return [
+      marca.denominacion,
+      linea.denominacion,
+      presentacion.cantidad,
+      presentacion.unidadMedida,
+    ].join(' ');
+  }
 }
