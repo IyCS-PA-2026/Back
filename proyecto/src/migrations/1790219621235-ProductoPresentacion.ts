@@ -7,31 +7,21 @@ import { MigrationInterface, QueryRunner } from "typeorm";
   (embedded en Producto): presentacionCantidad y presentacionUnidadmedida.
 
   Productos existentes:
-    La presentación es obligatoria (NOT NULL) y no puede deducirse de los datos
-    actuales: utilizaPack / cantidadPorPack no contienen ninguna unidad de medida.
-    MySQL completaría las filas existentes con 0 y '' (valores que violan las reglas
-    del dominio), por lo que la migración NO se aplica si la tabla tiene filas
-    (incluidas las eliminadas lógicamente). Ver docs/CR-002-presentacion.md.
+    Se asigna cantidad = 1 y unidad = 'Unidad' a todas las filas existentes,
+    incluidas las eliminadas lógicamente. Son valores provisionales acordados
+    para el despliegue, no una conversión de utilizaPack / cantidadPorPack.
+    Luego se aplica NOT NULL sin dejar defaults para las altas nuevas.
 
-  El control se hace antes de cualquier ALTER porque en MySQL cada DDL
-  confirma implícitamente y no puede revertirse con la transacción.
+  En MySQL cada DDL confirma implícitamente: realizar un respaldo y detener
+  las escrituras durante la migración; una falla puede dejar cambios parciales.
 */
 export class ProductoPresentacion1790219621235 implements MigrationInterface {
     name = 'ProductoPresentacion1790219621235'
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        const [{ total }] = await queryRunner.query(`SELECT COUNT(*) AS \`total\` FROM \`producto\``);
-        if (Number(total) > 0) {
-            throw new Error(
-                `CR-002: la tabla producto tiene ${total} fila(s). ` +
-                `No es posible asignarles una presentación (cantidad y unidad de medida) sin conocer sus valores reales. ` +
-                `Cargue la presentación real de cada producto o vacíe la tabla en entornos de prueba, y vuelva a ejecutar la migración. ` +
-                `No se realizó ningún cambio.`,
-            );
-        }
-
-        await queryRunner.query(`ALTER TABLE \`producto\` ADD \`presentacionCantidad\` decimal(12,3) NOT NULL`);
-        await queryRunner.query(`ALTER TABLE \`producto\` ADD \`presentacionUnidadmedida\` text NOT NULL`);
+        await queryRunner.query(`ALTER TABLE \`producto\` ADD \`presentacionCantidad\` decimal(12,3) NULL, ADD \`presentacionUnidadmedida\` text NULL`);
+        await queryRunner.query(`UPDATE \`producto\` SET \`presentacionCantidad\` = 1, \`presentacionUnidadmedida\` = 'Unidad'`);
+        await queryRunner.query(`ALTER TABLE \`producto\` MODIFY \`presentacionCantidad\` decimal(12,3) NOT NULL, MODIFY \`presentacionUnidadmedida\` text NOT NULL`);
         await queryRunner.query(`ALTER TABLE \`producto\` DROP COLUMN \`utilizaPack\``);
         await queryRunner.query(`ALTER TABLE \`producto\` DROP COLUMN \`cantidadPorPack\``);
     }
